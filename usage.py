@@ -19,7 +19,7 @@ from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
-PROFILE = Path.home() / "Desktop/claude_usage/chrome-profile"
+PROFILE = Path(__file__).resolve().parent / "chrome-profile"
 CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 URL = "https://claude.ai/settings/usage"
 PORT = 9222

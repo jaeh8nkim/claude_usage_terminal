@@ -1,4 +1,4 @@
-# claude_usage
+# claude_usage_terminal
 
 Terminal dashboard showing your Claude plan usage (current session %, weekly all-models %, with reset times), read from `claude.ai/settings/usage` in a headless Chrome.
 
