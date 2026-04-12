@@ -158,7 +158,7 @@ def render_data(data: dict, last_fetch: float) -> None:
     cols = shutil.get_terminal_size((80, 24)).columns
     rows = [fg(*GRAY) + "Claude Usage" + RESET, ""]
     for key, title in [("session", "Current session"),
-                       ("week_all", "Weekly · all models")]:
+                       ("week_all", "Weekly limits")]:
         if key in data:
             p, r = data[key]
             rows.extend(usage_bar(title, p, r, cols))
