@@ -2,6 +2,7 @@
 """Terminal dashboard for Claude usage."""
 import os
 os.environ["NODE_OPTIONS"] = "--no-deprecation"
+import json
 import re
 import shutil
 import socket
@@ -15,10 +16,13 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 
 PROFILE = Path(__file__).resolve().parent / "chrome-profile"
+CACHE_DIR = Path.home() / ".cache" / "claude-usage-monitor"
+CACHE_FILE = CACHE_DIR / "latest.json"
 CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 URL = "https://claude.ai/settings/usage"
 PORT = 9222
-REFRESH = 60
+REFRESH = 50
+REFRESH_DISPLAY = 60
 UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36")
 
@@ -33,7 +37,9 @@ BLUE = (64, 117, 208)
 DIM = (60, 60, 60)
 GRAY = (180, 180, 180)
 RESET = "\x1b[0m"
-CLEAR = "\x1b[2J\x1b[H"
+HOME = "\x1b[H"
+CLEAR_EOL = "\x1b[K"
+CLEAR_EOS = "\x1b[J"
 HIDE_CURSOR = "\x1b[?25l"
 SHOW_CURSOR = "\x1b[?25h"
 
@@ -150,8 +156,7 @@ def render_loading(job: FetchJob) -> None:
         rows.append(fg(*GRAY) + f"  {mark}  step {i}/{len(STEPS)}  {name}" + RESET)
     rows.append("")
     rows.append(fg(*GRAY) + f"  about {remaining}s remaining (~{TOTAL_EST}s total)" + RESET)
-    sys.stdout.write(CLEAR + "\n".join(rows) + "\n")
-    sys.stdout.flush()
+    paint(rows)
 
 
 def render_data(data: dict, last_fetch: float) -> None:
@@ -164,14 +169,31 @@ def render_data(data: dict, last_fetch: float) -> None:
             rows.extend(usage_bar(title, p, r, cols))
             rows.append("")
     age = int(time.time() - last_fetch)
-    rows.append(fg(*GRAY) + f"updated {age}s ago · refreshes every {REFRESH}s · ctrl-c to quit" + RESET)
-    sys.stdout.write(CLEAR + "\n".join(rows) + "\n")
+    rows.append(fg(*GRAY) + f"updated {age}s ago · refreshes every {REFRESH_DISPLAY}s · ctrl-c to quit" + RESET)
+    paint(rows)
+
+
+def write_cache(data: dict, fetched_at: float) -> None:
+    payload = {
+        "fetched_at": fetched_at,
+        "fetched_at_iso": time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(fetched_at)),
+        "usage": {k: {"percent": p, "resets": r} for k, (p, r) in data.items()},
+    }
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    tmp = CACHE_FILE.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(payload, indent=2))
+    tmp.replace(CACHE_FILE)
+
+
+def paint(rows: list[str]) -> None:
+    buf = HOME + "".join(r + CLEAR_EOL + "\n" for r in rows) + CLEAR_EOS
+    sys.stdout.write(buf)
     sys.stdout.flush()
 
 
 def main() -> int:
     sys.stdout.write("\x1b]0;Claude Usage\x07")
-    sys.stdout.write(HIDE_CURSOR)
+    sys.stdout.write(HIDE_CURSOR + "\x1b[2J")
     data: dict | None = None
     last_fetch = 0.0
     try:
@@ -188,6 +210,7 @@ def main() -> int:
             if job.result:
                 data = job.result
                 last_fetch = time.time()
+                write_cache(data, last_fetch)
             # Idle countdown until next refresh.
             next_fetch = time.time() + REFRESH
             while time.time() < next_fetch:
