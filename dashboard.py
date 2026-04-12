@@ -170,6 +170,7 @@ def render_data(data: dict, last_fetch: float) -> None:
 
 
 def main() -> int:
+    sys.stdout.write("\x1b]0;Claude Usage\x07")
     sys.stdout.write(HIDE_CURSOR)
     data: dict | None = None
     last_fetch = 0.0
