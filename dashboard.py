@@ -34,8 +34,10 @@ STEPS = [
 TOTAL_EST = sum(s[1] for s in STEPS)
 
 BLUE = (64, 117, 208)
-DIM = (60, 60, 60)
+DIM = (40, 40, 40)
 GRAY = (180, 180, 180)
+DARK_GRAY = (110, 110, 110)
+RED = (177, 20, 52)
 RESET = "\x1b[0m"
 HOME = "\x1b[H"
 CLEAR_EOL = "\x1b[K"
@@ -135,7 +137,7 @@ def bar_line(filled: int, empty: int, fill_color: tuple) -> str:
 
 def usage_bar(label: str, percent: int, reset_text: str, width: int) -> list[str]:
     header = f"{label}  {percent}% used  ·  {reset_text}"
-    body_w = max(20, width - 2)
+    body_w = max(20, width)
     filled = int(round(body_w * percent / 100))
     return [fg(*GRAY) + header + RESET, bar_line(filled, body_w - filled, BLUE)]
 
@@ -159,7 +161,7 @@ def render_loading(job: FetchJob) -> None:
     paint(rows)
 
 
-def render_data(data: dict, last_fetch: float) -> None:
+def render_data(data: dict, last_fetch: float, error: str | None = None) -> None:
     cols = shutil.get_terminal_size((80, 24)).columns
     rows = [fg(*GRAY) + "Claude Usage" + RESET, ""]
     for key, title in [("session", "Current session"),
@@ -169,7 +171,12 @@ def render_data(data: dict, last_fetch: float) -> None:
             rows.extend(usage_bar(title, p, r, cols))
             rows.append("")
     age = int(time.time() - last_fetch)
-    rows.append(fg(*GRAY) + f"updated {age}s ago · refreshes every {REFRESH_DISPLAY}s · ctrl-c to quit" + RESET)
+    if error:
+        status = f"updated {age}s ago · fetch failed · refreshes every {REFRESH_DISPLAY}s · ctrl-c to quit"
+        rows.append(fg(*RED) + status + RESET)
+    else:
+        status = f"updated {age}s ago · refreshes every {REFRESH_DISPLAY}s · ctrl-c to quit"
+        rows.append(fg(*DARK_GRAY) + status + RESET)
     paint(rows)
 
 
@@ -196,6 +203,7 @@ def main() -> int:
     sys.stdout.write(HIDE_CURSOR + "\x1b[2J")
     data: dict | None = None
     last_fetch = 0.0
+    last_error: str | None = None
     try:
         while True:
             job = FetchJob()
@@ -205,17 +213,20 @@ def main() -> int:
                 if data is None:
                     render_loading(job)
                 else:
-                    render_data(data, last_fetch)
+                    render_data(data, last_fetch, last_error)
                 time.sleep(0.25)
             if job.result:
                 data = job.result
                 last_fetch = time.time()
+                last_error = None
                 write_cache(data, last_fetch)
+            elif job.error:
+                last_error = job.error
             # Idle countdown until next refresh.
             next_fetch = time.time() + REFRESH
             while time.time() < next_fetch:
                 if data is not None:
-                    render_data(data, last_fetch)
+                    render_data(data, last_fetch, last_error)
                 time.sleep(1)
     except KeyboardInterrupt:
         pass
