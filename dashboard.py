@@ -108,7 +108,15 @@ class FetchJob:
                 proc.terminate()
                 try: proc.wait(timeout=5)
                 except subprocess.TimeoutExpired: proc.kill()
-            self.result = parse(body)
+            result = parse(body)
+            if not result:
+                low = body.lower()
+                if "log in" in low and "sign up" in low:
+                    self.error = "signed out — run Setup again"
+                else:
+                    self.error = "couldn't read usage page"
+            else:
+                self.result = result
             self.step = 4
         except Exception as e:
             self.error = str(e)
